@@ -101,11 +101,37 @@ test("lockFile: release never deletes a lock another process has since taken", (
   }
 });
 
-// Real bug (shared/lock.ts, lockOwner): an empty lock file reads as pid 0, and kill(0, 0) signals the
-// whole process group and succeeds, so the lock looks owned by "process 0". A garbage file reads as NaN,
-// which makes kill throw a non-ESRCH error, so it also looks owned. Either way the app refuses to start
-// until someone deletes the file by hand. Un-todo this test when lockOwner ignores unparsable contents.
-test.todo("lockOwner treats an empty or non-numeric lock file as stale");
+test("lockOwner: an empty or non-numeric lock file is stale, not a live owner", () => {
+  const t = tempDir();
+  try {
+    const path = join(t.root, "junk.lock");
+    // "" would read as pid 0, and kill(0, 0) signals the whole process group, which succeeds.
+    for (const junk of ["", "   ", "\n", "abc", "12abc", "-1", "0", "1.5", "1e3", "99999999999999999999", String(2 ** 31)]) {
+      writeFileSync(path, junk);
+      assert.equal(lockOwner(path), undefined, JSON.stringify(junk));
+    }
+    writeFileSync(path, ` ${process.pid}\n`);
+    assert.equal(lockOwner(path), process.pid, "surrounding whitespace is fine");
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("lockFile: starts over a lock file left empty or garbled by a crash", () => {
+  const t = tempDir();
+  try {
+    const path = join(t.root, "crashed.lock");
+    for (const junk of ["", "not a pid"]) {
+      writeFileSync(path, junk);
+      const release = lockFile(path);
+      assert.equal(readFileSync(path, "utf8"), String(process.pid));
+      release();
+      assert.equal(existsSync(path), false);
+    }
+  } finally {
+    t.cleanup();
+  }
+});
 
 test("ensureLogSchema: creates logs and control, is idempotent, and enforces unique insert ids", () => {
   const db = new DatabaseSync(":memory:");

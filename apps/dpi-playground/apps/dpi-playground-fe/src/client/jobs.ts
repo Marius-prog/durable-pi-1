@@ -30,8 +30,15 @@ export const runByCall = (callId: string) => jobRuns.value.find((r) => r.toolCal
 export const now = ref(Date.now());
 setInterval(() => (now.value = Date.now()), 1000);
 
-export const seconds = (ms: number) =>
-  ms < 1000 ? `${Math.max(0, Math.round(ms))}ms` : ms < 60_000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+export function seconds(ms: number) {
+  // Round to the unit shown first, then pick the unit, so 999.6ms is "1.0s" and 119.6s is "2m 0s".
+  const whole = Math.round(ms);
+  if (whole < 1000) return `${Math.max(0, whole)}ms`;
+  const tenths = Math.round(ms / 100);
+  if (tenths < 600) return `${(tenths / 10).toFixed(1)}s`;
+  const total = Math.round(ms / 1000);
+  return `${Math.floor(total / 60)}m ${total % 60}s`;
+}
 
 export const pending = ref<string>();
 

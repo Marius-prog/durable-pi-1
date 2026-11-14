@@ -145,16 +145,14 @@ describe("toolSignature: types", () => {
     assert.equal(ts(true), "unknown", "a boolean schema is valid JSON Schema but carries no type");
   });
 
-  // type() guards against a null schema, but object() reads `.description` off each property first,
-  // so one null property makes the whole declaration throw instead of printing `unknown`.
-  test(
-    "a null property schema is unknown, not a crash",
-    { todo: "docComment() does not guard null or undefined" },
-    () => {
-      assert.equal(ts(null), "unknown");
-      assert.equal(ts(undefined), "unknown");
-    },
-  );
+  test("a null or undefined property schema is unknown, not a crash", () => {
+    assert.equal(ts(null), "unknown");
+    assert.equal(ts(undefined), "unknown");
+    assert.equal(
+      sig({ type: "object", properties: { a: null, b: { type: "string" } } }),
+      wrap("{\n  a?: unknown;\n  b?: string;\n}"),
+    );
+  });
 
   test("the top level can be unknown too", () => {
     assert.equal(sig(undefined), wrap("unknown"));

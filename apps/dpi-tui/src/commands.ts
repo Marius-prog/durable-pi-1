@@ -38,11 +38,16 @@ const KEYS: [string, string][] = [
   ["ctrl+d", "exit"],
 ];
 
+export const NO_SESSION = "Pick a session first (/sessions).";
+/** Commands that act on the attached agent. */
+const NEEDS_AGENT = new Set(["new", "fork", "thinking", "compact", "reset", "name"]);
+
 /** Returns false when `text` is not a command, so the caller sends it to the agent. */
 export async function runCommand(app: App, text: string): Promise<boolean> {
   const match = text.match(/^\/(\S+)\s*([\s\S]*)$/);
   const command = COMMANDS.find((c) => c.name === match?.[1]);
   if (!match || !command) return false;
+  if (NEEDS_AGENT.has(command.name) && (!app.handle || !app.sessionId)) return app.flash(NO_SESSION, true), true;
   const arg = match[2].trim();
   const handle = app.handle;
   switch (command.name) {

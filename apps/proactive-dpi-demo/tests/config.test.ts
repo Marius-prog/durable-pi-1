@@ -155,7 +155,53 @@ test("the project .env is loaded from the project root, and only when it exists"
   assert.equal(projectEnvPath, resolve(import.meta.dirname, "../../../.env"));
 });
 
-// config.ts does no range checks: `--incident-threshold three` becomes NaN, `logIds.length < NaN` is always false,
-// and the watcher would then open an incident on the very first non-normal verdict. The tts flag is validated;
-// the numeric flags are not. Un-todo this when they are.
-test.todo("a non-numeric or non-positive numeric flag is rejected at startup");
+const NUMERIC_FLAGS: [flag: string, field: keyof Config, valid: string, expected: number][] = [
+  ["--port", "port", "8080", 8080],
+  ["--incident-threshold", "incidentThreshold", "2", 2],
+  ["--suspicious-threshold", "suspiciousThreshold", "12", 12],
+  ["--jev-concurrency", "jevConcurrency", "1", 1],
+  ["--window", "windowMs", "45", 45_000],
+  ["--backlog", "backlogMs", "2.5", 2500],
+];
+
+for (const [flag, field, valid, expected] of NUMERIC_FLAGS)
+  test(`${flag}: accepts ${valid}, rejects anything that is not a positive number`, () => {
+    assert.equal(loaded([flag, valid]).config[field], expected);
+    for (const bad of ["three", "", "0", "-1", "1x", "NaN", "Infinity", "-Infinity", "0x", "1,5"]) {
+      const r = load([flag, bad]);
+      assert.equal(r.ok, false, `${flag} ${JSON.stringify(bad)}`);
+      // An empty value is caught earlier, as a missing value.
+      assert.match(r.ok ? "" : r.stderr, bad === "" ? new RegExp(`${flag} needs a value`) : new RegExp(`${flag} must be a (positive number|whole number)`), r.ok ? "" : r.stderr);
+    }
+  });
+
+test("count flags must be whole numbers; durations may be fractions of a second", () => {
+  for (const flag of ["--port", "--incident-threshold", "--suspicious-threshold", "--jev-concurrency"]) {
+    const r = load([flag, "2.5"]);
+    assert.equal(r.ok, false, flag);
+    assert.match(r.ok ? "" : r.stderr, /must be a whole number from 1 to \d+, got "2\.5"/);
+  }
+  assert.equal(loaded(["--window", "0.5"]).config.windowMs, 500);
+});
+
+test("--port must be a valid TCP port", () => {
+  assert.equal(loaded(["--port", "65535"]).config.port, 65535);
+  assert.equal(loaded(["--port", "1"]).config.port, 1);
+  const r = load(["--port", "65536"]);
+  assert.equal(r.ok, false);
+  assert.match(r.ok ? "" : r.stderr, /--port must be a whole number from 1 to 65535, got "65536"/);
+});
+
+test("the error names the flag and the bad value", () => {
+  const r = load(["--incident-threshold", "three"]);
+  assert.equal(r.ok, false);
+  assert.match(r.ok ? "" : r.stderr, /--incident-threshold must be a whole number from 1 to \d+, got "three"/);
+  const w = load(["--window", "soon"]);
+  assert.match(w.ok ? "" : w.stderr, /--window must be a positive number of seconds, got "soon"/);
+});
+
+test("unchanged defaults still load when other flags are valid", () => {
+  const { config } = loaded(["--port", "5000"]);
+  assert.equal(config.incidentThreshold, 3);
+  assert.equal(config.windowMs, 120_000);
+});

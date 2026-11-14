@@ -756,7 +756,14 @@ export class Store {
     const at = Number(body.entryId);
     if (!Number.isSafeInteger(at)) throw invalid("entryId is required");
     if (body.name !== undefined && typeof body.name !== "string") throw invalid("Invalid fork name");
-    const fork = await c.fork(at as EntryId, { ownership: { kind: "ownerless" } }, ctx);
+    let fork: Conversation;
+    try {
+      fork = await c.fork(at as EntryId, { ownership: { kind: "ownerless" } }, ctx);
+    } catch (e) {
+      // pi-durable throws a plain Error for an entry outside this agent's history; that is a caller mistake, not a fault.
+      if (/^Entry -?\d+ is not visible from conversation/.test(String((e as Error)?.message))) throw notFound(`No entry ${at} in this agent's history`);
+      throw e;
+    }
     const agent = await fork.agent(ctx);
     await fork.configure({ model: this.routedModel(agent.model) }, ctx);
     if (typeof body.name === "string" && body.name.trim()) this.setAgentName(row, fork.id as number, body.name);

@@ -116,7 +116,8 @@ function literal(value: unknown, emit: Emit) {
   emit(String(value), "type");
 }
 
-function docComment(s: Schema) {
+function docComment(s: Schema | null | undefined) {
+  if (!s || typeof s !== "object") return "";
   const parts = [
     s.description,
     s.minimum !== undefined ? `@minimum ${s.minimum}` : "",

@@ -102,12 +102,22 @@ describe("formatting helpers", () => {
     assert.equal(ago(now - 10 * 86_400_000), "10d ago");
   });
 
-  // Between 3,570 and 3,599 seconds the minute count rounds up to 60, so it reads "60m ago" where
-  // "1h ago" is meant: the hour boundary is tested on the unrounded seconds.
-  test("ago() never says 60m", { todo: "rounds minutes up to 60 just below an hour" }, (t) => {
+  test("ago() rolls over to the next unit at the rounding edge, never 60m or 24h", (t) => {
     const now = 1_800_000_000_000;
     t.mock.timers.enable({ apis: ["Date"], now });
-    assert.equal(m.store.ago(now - 3_599_000), "1h ago");
+    const ago = (seconds: number) => m.store.ago(now - seconds * 1000);
+    assert.equal(ago(59), "59s ago");
+    assert.equal(ago(89), "1m ago");
+    assert.equal(ago(90), "2m ago");
+    assert.equal(ago(3569), "59m ago");
+    assert.equal(ago(3570), "1h ago");
+    assert.equal(ago(3599), "1h ago");
+    assert.equal(ago(3600), "1h ago");
+    assert.equal(ago(86_399 - 1800), "23h ago");
+    assert.equal(ago(86_399 - 1799), "1d ago");
+    assert.equal(ago(86_399), "1d ago");
+    assert.equal(ago(86_400), "1d ago");
+    for (let s = 0; s < 3 * 86_400; s += 7) assert.doesNotMatch(ago(s), /^(60m|24h|0d)/, `${s}s`);
   });
 
   test("icon() is the model's icon from the device, or the lab icon", async () => {

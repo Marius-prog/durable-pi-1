@@ -26,7 +26,7 @@ export function parseSubKey(key: string) {
   const [, deviceId, scope, a, b, docs] = m;
   const q = docs ? `?docs=${docs}` : "";
   const enc = encodeURIComponent;
-  if (scope === "device") return { key, deviceId, path: `/v1/events${q}` };
+  if (scope === "device" && !a) return { key, deviceId, path: `/v1/events${q}` };
   if (scope === "session" && a && !b)
     return { key, deviceId, path: `/v1/sessions/${enc(decodeURIComponent(a))}/events` };
   if (scope === "agent" && a && b)
@@ -100,6 +100,10 @@ export class StreamMux {
     const wanted = new Map(
       (keys as string[]).filter((k) => k !== "network").map((k) => [k, parseSubKey(k)]),
     );
+    // All-or-nothing: check every new key before touching the open upstreams.
+    for (const [key, sub] of wanted)
+      if (!stream.upstreams.has(key) && !this.registry.get(sub.deviceId))
+        throw Object.assign(Error(`No device ${sub.deviceId}`), { status: 404 });
     for (const [key, ctl] of stream.upstreams)
       if (!wanted.has(key)) {
         ctl.abort();
@@ -107,8 +111,6 @@ export class StreamMux {
       }
     for (const [key, sub] of wanted)
       if (!stream.upstreams.has(key)) {
-        if (!this.registry.get(sub.deviceId))
-          throw Object.assign(Error(`No device ${sub.deviceId}`), { status: 404 });
         const ctl = new AbortController();
         stream.upstreams.set(key, ctl);
         void this.follow(stream, sub, ctl.signal);

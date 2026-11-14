@@ -70,7 +70,7 @@ export class ToolRow implements Component {
       : shown;
     const out = [head, ...lines.map((l) => truncateToWidth(gutter + (s === "error" ? c.err(l) : l), width))];
     if (all.length > shown.length)
-      out.splice(1, 0, truncateToWidth(c.muted(`  │ … ${all.length - shown.length} earlier lines (ctrl+o)`), width));
+      out.splice(1, 0, truncateToWidth(c.muted(`  │ … ${all.length - shown.length} earlier line${all.length - shown.length === 1 ? "" : "s"} (ctrl+o)`), width));
     return out;
   }
   invalidate() {}

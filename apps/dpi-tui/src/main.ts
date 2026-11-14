@@ -75,8 +75,13 @@ const info = await client.device({ timeoutMs: 8000 }).catch((e: unknown) =>
       : `${device.id} is offline at ${device.url} (${(e as Error).message})`,
   ),
 );
-if (values.save && url)
-  registry.upsert({ id: values.save, name: values.save, url: device.url, kind: "url", source: "ui", token: device.token });
+if (values.save && url) {
+  try {
+    registry.upsert({ id: values.save, name: values.save, url: device.url, kind: "url", source: "ui", token: device.token });
+  } catch (e) {
+    fail(`Could not save ${values.save}: ${(e as Error).message}`);
+  }
+}
 
 let session = sessionRef;
 if (values.new) {

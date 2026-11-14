@@ -63,6 +63,8 @@ The timeline depends on Jev. Up to 6 Jev calls run at once, and 429, 502, 503 an
 | `--backlog <s>` | `300` | Rows older than this when first seen are marked skipped instead of judged |
 | `--jev-concurrency <n>` | `6` | Jev calls in flight |
 
+Numeric flags must be positive numbers: `--port` is a whole number from 1 to 65535, the thresholds and `--jev-concurrency` are whole numbers, `--window` and `--backlog` are seconds. Anything else stops startup with an error that names the flag.
+
 Example: `npm start -- --bug-at 30`. The flask icon in the top bar shows the countdown and can deploy the bug on demand. `DPI_READY_SPEECH` changes the spoken line. It plays when the agent first asks to deploy, and is synthesized at boot so it plays without delay. `ELEVENLABS_VOICE_ID` and `ELEVENLABS_MODEL` override the voice. One incident costs about $0.09 of Sonnet 5.5 through deploy, and Jev costs about $0.00003 per row.
 
 ## How it works
@@ -79,7 +81,7 @@ Example: `npm start -- --bug-at 30`. The flask icon in the top bar shows the cou
    - `submit_fix`, which runs the changed tests against `main` (they must fail) and the full suite on the branch (it must pass), then commits
    - `deploy`
    
-   The tools refuse a skipped stage. A `beforeTool` hook blocks `git push`, `merge`, `rebase`, `reset --hard`, branch switching, deleting or renaming branches, and worktree changes.
+   The tools refuse a skipped stage. A `beforeTool` hook (`git-guard.ts`) reads each bash command like a shell does, through quotes, `;` `&&` `||` `|`, subshells, `$(...)`, `env`/`sudo`/`xargs`/`find -exec` prefixes and `sh -c`, and finds the git call, including options before the subcommand (`git -C .. push`). It blocks `push`, `pull`, `merge`, `rebase`, `reset --hard`, any branch switch (`checkout <branch>`, `checkout -`, `switch`), deleting, renaming or force-moving branches, `update-ref`, `symbolic-ref` writes, worktree changes, git aliases, and any command it cannot read (a command name or subcommand built from a `$` expansion, a shell fed from stdin). Status, diff, log, show, add, commit, `checkout -- <file>`, `restore` and `branch` (list) keep working. It is a seatbelt, not a sandbox: it cannot see inside a script, `node -e`, `npm run`, `make`, or a test file the agent writes and runs.
 5. **The deploy** is the `ops.deploy` durable task, owned by the `deploy` tool call. Its phases are checkpointed:
    - `approval` waits for the engineer's decision in the session document `ops.deploys`.
    - `rollout` asks the stream for the new revision and waits up to 30 seconds for it to serve.
@@ -109,6 +111,7 @@ Example: `npm start -- --bug-at 30`. The flask icon in the top bar shows the cou
 | `apps/proactive-dpi-be/src/watcher.ts` | Jev questions, fingerprints, thresholds |
 | `apps/proactive-dpi-be/src/ops.ts` | Harness, Ops desk, atomic incident open, recovery |
 | `apps/proactive-dpi-be/src/extensions.ts` | `ops.incidents` and `ops.deploys` docs, the `ops.deploy` task, tools, playbook, git guard hook |
+| `apps/proactive-dpi-be/src/git-guard.ts` | The bash command parser behind the git guard |
 | `apps/proactive-dpi-be/src/jev.ts`, `watch-store.ts`, `repo.ts` | Jev client, verdict store, branch diffs for review |
 | `apps/proactive-dpi-be/src/voice.ts` | ElevenLabs speech, host or browser playback |
 | `apps/proactive-dpi-fe/` | Two-column UI in the dpi-playground theme |

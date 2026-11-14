@@ -174,6 +174,20 @@ test("hits: log ids for one fingerprint and decision inside the window, oldest f
   assert.deepEqual(store.hits(fp, "normal", minutesAgo(15)), []);
 });
 
+test("hits: minProbability keeps only verdicts at or above it, and treats a missing probability as 0", () => {
+  const fp = "checkout-api · POST /v1/checkout · TypeError";
+  const rows = [add(), add(), add(), add()];
+  store.saveVerdict(verdict(rows[0], { fingerprint: fp, probability: 0.3 }), rows[0].ts);
+  store.saveVerdict(verdict(rows[1], { fingerprint: fp, probability: 0.6 }), rows[1].ts);
+  store.saveVerdict(verdict(rows[2], { fingerprint: fp, probability: 0.95 }), rows[2].ts);
+  store.saveVerdict(verdict(rows[3], { fingerprint: fp, probability: undefined }), rows[3].ts);
+  const since = minutesAgo(5);
+  assert.deepEqual(store.hits(fp, "incident", since), rows.map((r) => r.id), "no minimum: everything");
+  assert.deepEqual(store.hits(fp, "incident", since, 0), rows.map((r) => r.id), "0 keeps rows with no probability");
+  assert.deepEqual(store.hits(fp, "incident", since, 0.6), [rows[1].id, rows[2].id], "0.6 is inclusive");
+  assert.deepEqual(store.hits(fp, "incident", since, 0.96), []);
+});
+
 test("fingerprintCounts: only suspicious and incident verdicts, grouped, busiest first", () => {
   const rows = Array.from({ length: 7 }, () => add());
   const decisions: [number, string, Verdict["decision"]][] = [
@@ -222,6 +236,26 @@ test("query: filters by service, route, status, revision, decision and text", ()
   assert.deepEqual(ids({ text: "sku=lamp" }), [a.id]);
   assert.deepEqual(ids({ text: "unhandled" }), [b.id], "text search is case insensitive");
   assert.deepEqual(ids({ service: "checkout-api", status: 200 }), [c.id], "filters combine with AND");
+});
+
+test("query: text is matched literally, so %, _ and backslash are not wildcards", () => {
+  const percent = add({ message: "discount 100% applied" });
+  const thousand = add({ message: "discount 1000 applied" });
+  const underscore = add({ message: "order ord_abc1 done" });
+  const letter = add({ message: "order ordXabc1 done" });
+  const slash = add({ message: String.raw`path C:\temp\x` });
+  const forward = add({ message: "path C:/temp/x" });
+  const ids = (text: string) => store.query({ text }).map((r) => r.id).sort((a, b) => a - b);
+  assert.deepEqual(ids("100%"), [percent.id], "% matches a percent sign, not '1000'");
+  assert.deepEqual(ids("100% applied"), [percent.id]);
+  assert.deepEqual(ids("%%"), [], "two percent signs are text, not 'anything'");
+  assert.deepEqual(ids("ord_abc"), [underscore.id], "_ matches an underscore, not any character");
+  assert.deepEqual(ids("ordXabc"), [letter.id]);
+  assert.deepEqual(ids("ord_"), [underscore.id]);
+  assert.deepEqual(ids(String.raw`\temp`), [slash.id], "a backslash is a backslash (it is doubled in the stored JSON)");
+  assert.deepEqual(ids("temp\\"), [slash.id], "a trailing backslash does not break the pattern");
+  assert.deepEqual(ids("temp"), [slash.id, forward.id], "plain text still matches as before");
+  assert.deepEqual(ids("DISCOUNT"), [percent.id, thousand.id], "still case insensitive");
 });
 
 test("query: min severity includes that level and everything above it", () => {

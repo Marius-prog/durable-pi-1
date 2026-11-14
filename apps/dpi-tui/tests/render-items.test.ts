@@ -168,10 +168,11 @@ test("the output tail is the last 6 lines; the earlier-lines note appears only w
   assert.ok(!rows(6).join("\n").includes("earlier"));
   const seven = rows(7);
   assert.equal(seven.length, 1 + 1 + 6);
-  assert.equal(seven[1], "  │ … 1 earlier lines (ctrl+o)");
+  assert.equal(seven[1], "  │ … 1 earlier line (ctrl+o)");
   assert.equal(seven[2], "  │ line 2", "the first line is the one cut");
   assert.equal(seven.at(-1), "  │ line 7");
   assert.equal(rows(100)[1], "  │ … 94 earlier lines (ctrl+o)");
+  assert.equal(rows(8)[1], "  │ … 2 earlier lines (ctrl+o)");
 });
 
 test("expanded output shows every line and no note, with blank lines kept and long lines wrapped", () => {

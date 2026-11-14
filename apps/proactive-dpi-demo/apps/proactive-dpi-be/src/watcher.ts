@@ -32,6 +32,9 @@ export const QUESTIONS: Record<string, Question> = {
   },
 };
 
+/** An incident verdict counts toward the incident threshold only at this probability or higher. */
+export const INCIDENT_PROBABILITY = 0.6;
+
 export type Trigger = { fingerprint: string; decision: Decision; logIds: number[] };
 
 /** Groups rows that share a cause: service, route, and the error type, status, or message shape. */
@@ -162,11 +165,12 @@ export class Watcher extends EventEmitter {
   private async evaluate(verdict: Verdict) {
     const { decision, fingerprint } = verdict;
     if (decision === "normal" || decision === undefined) return;
-    if (decision === "incident" && (verdict.probability ?? 0) < 0.6) return;
+    if (decision === "incident" && (verdict.probability ?? 0) < INCIDENT_PROBABILITY) return;
     const threshold =
       decision === "incident" ? this.options.incidentThreshold : this.options.suspiciousThreshold;
     const since = new Date(Date.now() - this.options.windowMs).toISOString();
-    const logIds = this.store.hits(fingerprint, decision, since);
+    // Suspicious verdicts count at any probability; incident verdicts only when Jev was confident.
+    const logIds = this.store.hits(fingerprint, decision, since, decision === "incident" ? INCIDENT_PROBABILITY : 0);
     if (logIds.length < threshold || this.triggering.has(fingerprint)) return;
     this.triggering.add(fingerprint);
     try {

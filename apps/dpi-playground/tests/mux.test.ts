@@ -53,6 +53,11 @@ describe("mux: parseSubKey", () => {
     );
   });
 
+  test("a device key takes no extra path segment, so one device has one device stream", () => {
+    assert.throws(() => parseSubKey("box/device/1"), /Invalid subscription key/);
+    assert.throws(() => parseSubKey("box/device/a/b"), /Invalid subscription key/);
+  });
+
   test("a malformed percent escape throws", () => {
     assert.throws(() => parseSubKey("box/session/%E0%A4%A"), URIError);
   });
@@ -362,21 +367,23 @@ describe("mux: subscriptions", () => {
     assert.match((await res.json()).error.message, /No device ghost/);
   });
 
-  // The loop that opens upstreams runs key by key, so a bad device later in the list leaves the
-  // earlier keys open although the request failed. The page keeps its old set after a 404 and the
-  // next PUT corrects the server, so nothing breaks, but the request is not all-or-nothing.
-  test(
-    "a failed PUT changes nothing (all or nothing)",
-    { todo: "subscribe() opens upstreams before it has checked every device" },
-    async (t) => {
-      const r = await rig(t);
-      const b = await r.open();
-      const res = await b.put(["box/session/s1", "ghost/session/s1"]);
-      assert.equal(res.status, 404);
-      await delay(200);
-      assert.equal(r.upstreams().length, 0, `open upstreams: ${r.upstreams()}`);
-    },
-  );
+  test("a failed PUT changes nothing (all or nothing)", async (t) => {
+    const r = await rig(t);
+    const b = await r.open();
+    const keep = await b.put(["box/session/s0"]);
+    assert.equal(keep.status, 200);
+    await until(() => r.upstreams().length === 1, 5000, "s0 open");
+    // An unknown device after a valid new key: no new upstream, and s0 is not dropped.
+    const res = await b.put(["box/session/s1", "ghost/session/s1"]);
+    assert.equal(res.status, 404);
+    await delay(200);
+    assert.deepEqual(r.upstreams(), ["/v1/sessions/s0/events"]);
+    // The same for an invalid key.
+    assert.equal((await b.put(["box/session/s2", "nope"])).status, 400);
+    await delay(200);
+    assert.deepEqual(r.upstreams(), ["/v1/sessions/s0/events"]);
+    assert.equal(r.stub.hitsTo("/v1/sessions/s1/events").length, 0);
+  });
 });
 
 describe("mux: subscription limits and validation", () => {

@@ -25,7 +25,7 @@ import {
   type WireAssistantMessage,
 } from "../../dpi-sdk/src/api.ts";
 import type { NetworkRegistry } from "../../dpi-sdk/src/node/registry.ts";
-import { COMMANDS, runCommand } from "./commands.ts";
+import { COMMANDS, NO_SESSION, runCommand } from "./commands.ts";
 import { pickModel, pickSession, Prompt } from "./pickers.ts";
 import { Line, spinner, TranscriptView } from "./render.ts";
 import { c, editorTheme } from "./theme.ts";
@@ -140,6 +140,8 @@ export class App {
     await this.run(async () => {
       this.info = await client.device({ timeoutMs: 8000 });
       this.streams?.abort();
+      this.connection = "idle";
+      this.sessions = [];
       this.device = { id: row.id, name: row.name, url: row.url, token: row.token! };
       this.client = client;
       this.sessionId = undefined;
@@ -203,7 +205,7 @@ export class App {
     const content = text.trim();
     if (!content) return;
     if (content.startsWith("/") && (await runCommand(this, content))) return;
-    if (!this.handle) return this.flash("Pick a session first (/sessions).", true);
+    if (!this.handle) return this.flash(NO_SESSION, true);
     // The same requestId on every retry: the device admits the message exactly once.
     const requestId = newId();
     for (let attempt = 1; ; attempt++) {

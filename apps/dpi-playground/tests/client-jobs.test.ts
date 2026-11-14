@@ -71,13 +71,19 @@ describe("seconds()", () => {
     assert.equal(s(3_600_000), "60m 0s", "there is no hour unit");
   });
 
-  test(
-    "a time just under a whole minute does not read 60s",
-    { todo: "119.6 seconds prints 1m 60s" },
-    () => {
-      assert.equal(m.jobs.seconds(119_600), "2m 0s");
-    },
-  );
+  test("rounding rolls over into the next unit instead of printing 1000ms, 60.0s or 1m 60s", () => {
+    const s = m.jobs.seconds;
+    assert.equal(s(999.4), "999ms");
+    assert.equal(s(999.6), "1.0s");
+    assert.equal(s(59_949), "59.9s");
+    assert.equal(s(59_950), "1m 0s");
+    assert.equal(s(59_999), "1m 0s");
+    assert.equal(s(119_400), "1m 59s");
+    assert.equal(s(119_600), "2m 0s");
+    assert.equal(s(3_599_600), "60m 0s");
+    for (let ms = 0; ms < 400_000; ms += 37)
+      assert.doesNotMatch(s(ms), /(^|\s)(1000ms|60\.0s|60s)/, `${ms}ms`);
+  });
 });
 
 describe("views", () => {

@@ -75,10 +75,7 @@ test("typing filters the picker, backspace widens it again, and the title shows 
   assert.ok(lines(p).join("\n").includes("apple"));
 });
 
-// Suspected bug (source left alone): SelectList.setFilter matches the *value* prefix, but every picker in pickers.ts
-// uses an id as the value (session uuid, agent id, "provider/model", a directory path) and shows a name as the label.
-// The hint says "type to filter", yet typing the visible name of a session, agent, model or directory finds nothing.
-test("typing part of a visible label finds the item even when its value is an id", { todo: "filter matches item.value, not the label shown" }, () => {
+test("typing part of a visible label finds the item even when its value is an id", () => {
   const picked: string[] = [];
   const sessions: SelectItem[] = [
     { value: "9f1c2d3e-0000-4000-8000-000000000001", label: "triage", description: "work/triage │ 3 agents" },
@@ -88,6 +85,23 @@ test("typing part of a visible label finds the item even when its value is an id
   for (const ch of "rev") p.handleInput(ch);
   p.handleInput(ENTER);
   assert.deepEqual(picked, ["review"]);
+});
+
+test("the filter ignores case, matches inside a label, and still matches the start of the value", () => {
+  const picked: string[] = [];
+  const list: SelectItem[] = [
+    { value: "9f1c-uuid", label: "  ⑂ Alt Path" },
+    { value: "7a0b-uuid", label: "triage" },
+  ];
+  const pick = (typed: string) => {
+    const p = new Picker("T", list, (i) => picked.push(i.label.trim()), () => {});
+    for (const ch of typed) p.handleInput(ch);
+    p.handleInput(ENTER);
+  };
+  pick("alt p");
+  pick("AGE");
+  pick("7a0b");
+  assert.deepEqual(picked, ["⑂ Alt Path", "triage", "triage"]);
 });
 
 test("a filter that matches nothing shows the empty message and enter picks nothing", () => {

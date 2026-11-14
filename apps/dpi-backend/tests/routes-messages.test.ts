@@ -181,12 +181,14 @@ describe("REST v1: messages, entries and tasks", () => {
       assert.ok((await call("GET", `${s.main}/entries?limit=99999`)).body.items.length >= 3);
     });
 
-    // SUSPECTED BUG: a non-numeric limit reaches SQLite as NaN and the client gets 500 "datatype mismatch".
-    // It should be a 400 or fall back to the default. The test states the expected behaviour.
-    test("a non-numeric limit is a client error, not a 500", { todo: "suspected bug: GET /entries?limit=abc answers 500 'datatype mismatch'" }, async () => {
+    test("a limit that is not a whole number is a 400 and never reaches the database", async () => {
       const s = await newSession();
-      const r = await call("GET", `${s.main}/entries?limit=abc`);
-      assert.ok(r.status === 400 || r.status === 200, `status ${r.status}: ${JSON.stringify(r.body)}`);
+      await ask(s.main, "hello");
+      for (const bad of ["abc", "", "1.5", "1e3", "0x10", "NaN", "Infinity", "5 6", "1&limit=2"])
+        errorOf(await call("GET", `${s.main}/entries?limit=${encodeURIComponent(bad)}`), 400, "invalid", "limit must be an integer");
+      errorOf(await call("GET", `${s.main}/entries?limit=1&limit=2`), 400, "invalid", "limit must be an integer");
+      assert.equal((await call("GET", `${s.main}/entries?limit=%201%20`)).body.items.length, 1, "surrounding spaces are fine");
+      assert.equal((await call("GET", `${s.main}/entries?limit=99999999999999999999999`)).status, 200, "huge numbers are clamped");
     });
 
     test("transcript is json by default, markdown on request, and unknown formats fall back to json", async () => {
@@ -220,13 +222,18 @@ describe("REST v1: messages, entries and tasks", () => {
       errorOf(await call("POST", `${s.main}/fork`, { entryId: entry.id, name: 5 }), 400, "invalid", "Invalid fork name");
     });
 
-    // SUSPECTED BUG: an entry id that is not in this agent's history makes the fork answer 500 with the engine's message.
-    // A caller mistake like this should be a 4xx. The test states the expected behaviour.
-    test("forking at an entry that does not exist is a client error, not a 500", { todo: "suspected bug: POST /fork with an unknown entryId answers 500 'Entry N is not visible from conversation 1'" }, async () => {
+    test("forking at an entry that is not in the agent's history is a 404 in the error envelope", async () => {
       const s = await newSession();
       await ask(s.main, "hello");
-      const r = await call("POST", `${s.main}/fork`, { entryId: 99999 });
-      assert.ok(r.status === 400 || r.status === 404, `status ${r.status}: ${JSON.stringify(r.body)}`);
+      errorOf(await call("POST", `${s.main}/fork`, { entryId: 99999 }), 404, "not_found", "No entry 99999 in this agent's history");
+      errorOf(await call("POST", `${s.main}/fork`, { entryId: 0 }), 404, "not_found");
+      errorOf(await call("POST", `${s.main}/fork`, { entryId: -3 }), 404, "not_found");
+      assert.equal((await call("GET", `${s.base}/agents`)).body.length, 1, "no agent was created");
+      // An entry of another agent in the same session is not visible either.
+      const other = await call("POST", `${s.base}/agents`, { name: "Other" });
+      await ask(`${s.base}/agents/${other.body.id}`, "elsewhere");
+      const theirs = (await call("GET", `${s.base}/agents/${other.body.id}/entries?scope=active`)).body.items.find((e: { kind: string }) => e.kind === "pi.user");
+      errorOf(await call("POST", `${s.main}/fork`, { entryId: theirs.id }), 404, "not_found");
     });
 
     test("a fork carries history up to the entry and not beyond", async () => {
@@ -268,6 +275,9 @@ describe("REST v1: messages, entries and tasks", () => {
       assert.deepEqual(tasks.map((x) => x.id), tasks.map((x) => x.id).sort((a, b) => b - a), "newest first");
       assert.equal((await call("GET", `${s.base}/tasks?limit=1`)).body.length, 1);
       assert.equal((await call("GET", `${s.base}/tasks?limit=0`)).body.length, 1, "limit is at least 1");
+      for (const bad of ["abc", "", "2.5", "NaN"])
+        errorOf(await call("GET", `${s.base}/tasks?limit=${encodeURIComponent(bad)}`), 400, "invalid", "limit must be an integer");
+      assert.deepEqual((await call("GET", `${s.base}/tasks?status=live&limit=abc`)).body, [], "live tasks take no limit, so it is not read");
     });
 
     test("inspect reports the scheduler state", async () => {

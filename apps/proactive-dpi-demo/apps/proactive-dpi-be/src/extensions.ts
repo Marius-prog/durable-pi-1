@@ -12,6 +12,7 @@ import {
 } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
 import type { Deploy, Incident, IncidentStatus, StreamRow } from "../../../shared/types.ts";
+import { gitGuard } from "./git-guard.ts";
 import { verifyAndCommit } from "./repo.ts";
 import type { WatchStore } from "./watch-store.ts";
 
@@ -457,8 +458,6 @@ export function createExtensions(deps: {
     ],
   });
 
-  const BLOCKED_GIT =
-    /\bgit\s+(push|merge|rebase|switch|worktree|reset\s+--hard|branch\s+-[dDmM]|checkout\s+(-b|-B|main\b|master\b))/;
   const IncidentAgent = defineExtension({
     name: "incident-agent",
     tools: [updateIncident, submitFix, deploy],
@@ -490,10 +489,10 @@ Rules: never push, merge, rebase, switch branches, or touch main. Read logs with
         beforeTool: (call) => {
           if (call.name !== "bash") return undefined;
           const command = String((call.arguments as { command?: unknown }).command ?? "");
-          if (BLOCKED_GIT.test(command))
+          const reason = gitGuard(command);
+          if (reason)
             return {
-              block:
-                "Blocked by the incident guard. Stay on your incident branch: no push, merge, rebase, branch switching, or worktree changes. A human reviews and merges.",
+              block: `Blocked by the incident guard. Stay on your incident branch: no push, merge, rebase, branch switching, or worktree changes. A human reviews and merges. Reason: ${reason}.`,
             };
           return undefined;
         },

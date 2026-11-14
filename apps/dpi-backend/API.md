@@ -26,19 +26,19 @@ The contract every Durable Agent Network client uses: the web hub, `dpi-tui`, sc
 | `GET / PATCH / DELETE /v1/sessions/:s` | PATCH `{name}` | summary (with its `compaction` thresholds); DELETE aborts all work, moves the files to `archive/` and returns `{archived}` |
 | `GET / PATCH /v1/sessions/:s/compaction` | PATCH `{enabled?, reserveTokens?, backgroundTokens?, keepRecentTokens?}` | the session's automatic compaction thresholds, read by pi-durable at its next request. Values are margins: the blocking summary starts at the model's context window minus `reserveTokens`, and the background one `backgroundTokens` earlier (0 turns it off). Default: a background summary at 200k tokens and a blocking one at 250k, or pi-durable's margins on smaller windows. Switching an agent to a window the thresholds do not fit refits them |
 | `GET /v1/sessions/:s/events` | | session stream |
-| `GET /v1/sessions/:s/tasks` | `?status=live\|terminal&limit=` | task nodes / recent outcomes |
+| `GET /v1/sessions/:s/tasks` | `?status=live\|terminal&limit=` | task nodes / recent outcomes; `limit` (terminal only) defaults to 20 and is clamped to 1-200; a value that is not a whole number is `400 invalid` |
 | `POST /v1/sessions/:s/tasks/:taskId/abort` | | `{status}` |
 | `GET /v1/sessions/:s/inspect` | | recovery inspection |
 | `GET /v1/sessions/:s/submissions/:id` | `?waitMs=` (≤300000) | `SendResult`, optionally long-polled |
 | `GET / POST /v1/sessions/:s/agents` | POST `{from?, name?}` | `AgentSummary[]` / `201 AgentSummary` |
 | `GET / PATCH .../agents/:a` | PATCH `{name}` | `AgentDetail` (config with `readOnly`, every tool with `replay`, `writes` and `offered`, extensions) / summary |
 | `GET .../agents/:a/events` | `?docs=demo.job-runs` | agent stream |
-| `GET .../agents/:a/entries` | `?scope=all\|active&cursor=&limit=` | `{items, next}` stored history; `limit` defaults to 500 (max 2000). `scope=active` returns `{items}`, the active context, unpaged |
+| `GET .../agents/:a/entries` | `?scope=all\|active&cursor=&limit=` | `{items, next}` stored history; `limit` defaults to 500 and is clamped to 1-2000; a value that is not a whole number is `400 invalid`. `scope=active` returns `{items}`, the active context, unpaged |
 | `GET .../agents/:a/transcript` | `?format=json\|markdown` | normalized transcript |
 | `POST .../agents/:a/messages` | `{content, whenBusy?: followUp\|steer\|reject, requestId, waitMs?}` (`whenBusy` defaults to `followUp`; `waitMs` ≤300000) | `202 {submissionId, status:"queued"\|"pending"}`, `200 {status:"done", answer:{entryId,text}}` or `200 {status:"unanswered", reason}` |
 | `DELETE .../agents/:a/inbox/:submissionId` | | withdraw a queued input |
 | `POST .../agents/:a/abort` | `{background?}` | stops foreground work (and background with `true`) |
-| `POST .../agents/:a/fork` | `{entryId, name?}` | `201 AgentSummary` |
+| `POST .../agents/:a/fork` | `{entryId, name?}` | `201 AgentSummary`; an `entryId` that is not in this agent's history is `404 not_found` |
 | `GET / PATCH .../agents/:a/config` | `{model?, thinkingLevel?, instructions?, cwd?, readOnly?}` | config; applies from the next request. `readOnly` filters the agent's tools to the ones that only read |
 | `GET / PATCH .../agents/:a/extensions` | PATCH `{name, enabled}` or `{prompt, enabled}` | `{extensions, builtIn}`: the custom extensions `system-prompts` (a checklist of the prompts in `prompts/`) and `jev-damage-control` (Jev judges each bash command and blocks destructive ones; the command goes to the Jev API, and a Jev error lets it run). Both are off by default. A change applies from the agent's next request |
 | `POST .../agents/:a/compact` | `{instructions?}` | `{taskId}` |

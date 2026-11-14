@@ -1,9 +1,8 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FIX, REGRESSION, git, makeCheckoutRepo, tempDir } from "./helpers.ts";
+import { FIX, REGRESSION, git, makeCheckoutRepo, tempDir, withEnv } from "./helpers.ts";
 import { branchReview, ensureWorktree, verifyAndCommit } from "../apps/proactive-dpi-be/src/repo.ts";
 
 const t = tempDir();
@@ -219,17 +218,23 @@ test("verifyAndCommit: a regression test the agent deleted is not run", () => {
 });
 
 test("verifyAndCommit: its scratch checkout of main is removed, pass or fail", () => {
-  const leftovers = () => readdirSync(tmpdir()).filter((name) => name.startsWith("incident-verify-"));
-  const before = new Set(leftovers());
-  const ok = incident();
-  write(ok.path, "src/pricing/loyalty.ts", FIX);
-  write(ok.path, "test/guest.test.ts", REGRESSION);
-  verifyAndCommit(ok.path, "fix: ok");
-  const weak = incident();
-  write(weak.path, "src/pricing/loyalty.ts", FIX);
-  write(weak.path, "test/green.test.ts", `import { test } from "node:test";\ntest("x", () => {});\n`);
-  assert.throws(() => verifyAndCommit(weak.path, "fix: weak"));
-  assert.deepEqual(leftovers().filter((name) => !before.has(name)), []);
+  // Point TMPDIR at a private folder so other test processes running at the same time cannot show up in it.
+  const scratchRoot = join(t.root, "tmp-scratch");
+  mkdirSync(scratchRoot, { recursive: true });
+  const restore = withEnv({ TMPDIR: scratchRoot });
+  try {
+    const ok = incident();
+    write(ok.path, "src/pricing/loyalty.ts", FIX);
+    write(ok.path, "test/guest.test.ts", REGRESSION);
+    verifyAndCommit(ok.path, "fix: ok");
+    const weak = incident();
+    write(weak.path, "src/pricing/loyalty.ts", FIX);
+    write(weak.path, "test/green.test.ts", `import { test } from "node:test";\ntest("x", () => {});\n`);
+    assert.throws(() => verifyAndCommit(weak.path, "fix: weak"));
+    assert.deepEqual(readdirSync(scratchRoot), []);
+  } finally {
+    restore();
+  }
 });
 
 test("verifyAndCommit: the tests run without the host's API keys", () => {

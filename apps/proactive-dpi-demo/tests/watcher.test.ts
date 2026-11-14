@@ -405,12 +405,36 @@ test("incident threshold: exactly 0.6 probability counts", async () => {
   await until(() => triggers.length === 1);
 });
 
-// README: "Incident verdicts (probability 0.6 or more) with one fingerprint that open an incident."
-// Real bug (watcher.ts evaluate + watch-store.ts hits): the 0.6 gate looks only at the verdict that is being
-// evaluated, but `hits()` counts every stored incident verdict for the fingerprint, whatever its probability.
-// Two 0.3-probability "incident" verdicts followed by one 0.9 verdict therefore open an incident with only
-// one confident row behind it. Un-todo this when the threshold counts only verdicts at 0.6 or more.
-test.todo("incident threshold counts only incident verdicts with probability 0.6 or more");
+test("incident threshold: only confident verdicts count toward it", async () => {
+  // README: "Incident verdicts (probability 0.6 or more) with one fingerprint that open an incident."
+  const triggers: Trigger[] = [];
+  const { jev } = fakeJev((state) => ({ decision: "incident", probability: state.message === "weak" ? 0.3 : 0.9 }));
+  const { watcher, verdicts } = watch(jev, async (tr) => void triggers.push(tr), { concurrency: 1 });
+  add({ ...BAD, message: "weak" });
+  add({ ...BAD, message: "weak" });
+  const confident = [add({ ...BAD, message: "strong" })];
+  watcher.start();
+  await until(() => verdicts.length === 3);
+  await delay(50);
+  assert.equal(triggers.length, 0, "two weak verdicts and one confident one are not three confident ones");
+  confident.push(add({ ...BAD, message: "strong" }));
+  await until(() => verdicts.length === 4);
+  await delay(50);
+  assert.equal(triggers.length, 0, "two confident, still short of three");
+  confident.push(add({ ...BAD, message: "strong" }));
+  await until(() => triggers.length === 1);
+  assert.deepEqual(triggers[0].logIds, confident.map((r) => r.id), "the weak rows are not part of the evidence");
+});
+
+test("suspicious threshold: verdicts count at any probability, including ones stored with none", async () => {
+  const triggers: Trigger[] = [];
+  const { jev } = fakeJev((_s, call) => ({ decision: "suspicious", probability: call % 2 ? 0.05 : 0.9 }));
+  const { watcher } = watch(jev, async (tr) => void triggers.push(tr), { concurrency: 1, suspiciousThreshold: 4 });
+  for (let i = 0; i < 4; i++) add({ message: "odd", severity: "WARNING", status: null, method: null, route: null, latencyMs: null });
+  watcher.start();
+  await until(() => triggers.length === 1);
+  assert.equal(triggers[0].logIds.length, 4);
+});
 
 test("suspicious threshold: seven do nothing, the eighth opens an incident", async () => {
   const triggers: Trigger[] = [];

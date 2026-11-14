@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { AgentSummary, Frame, WireEntry, WireSnapshotEvent, WireUsage } from "../../dpi-sdk/src/api.ts";
 import { pickAgent } from "../src/pickers.ts";
 import { spinner } from "../src/render.ts";
-import { agent, session, settle, until } from "./support/fake-device.ts";
+import { agent, session, settle, startFakeDevice, until } from "./support/fake-device.ts";
 import { strip } from "./support/fake-terminal.ts";
 import { batch, withApp, type Launched } from "./support/launch.ts";
 
@@ -747,7 +747,6 @@ test("exit without a session prints no reattach command", async () => {
 
 test("switchDevice moves to another device and opens its session picker", async () => {
   await withApp({ open: ["triage"] }, async (ctx) => {
-    const { startFakeDevice } = await import("./support/fake-device.ts");
     const other = await startFakeDevice();
     other.info = { ...other.info, name: "other", models: other.info.models };
     try {
@@ -798,18 +797,25 @@ test("sessionSummary uses the live agent list once the session stream is ready",
   });
 });
 
-// Suspected bug (source left alone): switchDevice resets the session, agent and models but not `connection`, so the
-// header of the new device, which has no agent attached yet, still says "● live" (or "offline") from the old one.
-test("after switching device the header does not claim a live connection", { todo: "switchDevice does not reset the connection state" }, async () => {
+test("after switching device the header does not claim a live connection", async () => {
   await withApp({ open: ["triage"] }, async (ctx) => {
-    const { startFakeDevice } = await import("./support/fake-device.ts");
     const other = await startFakeDevice();
     try {
       ctx.registry.upsert({ id: "other", name: "Other", kind: "url", url: other.url, token: "o".repeat(40) });
       await ctx.app.switchDevice("other");
-      assert.match(ctx.header(), /○ no agent$/);
+      assert.equal(ctx.header(), "dpi  │  device other  │  no workspace  │  ○ no agent");
     } finally {
       await other.close();
     }
+  });
+});
+
+test("typing a command with no session attached says to pick one", async () => {
+  await withApp({}, async (ctx) => {
+    ctx.typeText("/compact");
+    await settle();
+    ctx.type(ENTER);
+    await until(() => ctx.status().length > 0, "a notice");
+    assert.deepEqual(ctx.status(), ["Pick a session first (/sessions)."]);
   });
 });

@@ -53,7 +53,7 @@ function localEnv(config: NetworkConfig): Record<string, string> {
   const out: Record<string, string> = {};
   if (!existsSync(file)) return out;
   for (const line of readFileSync(file, "utf8").split("\n")) {
-    const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    const m = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
     if (!m) continue;
     out[m[1]] = m[2].replace(/^(['"])(.*)\1$/, "$2");
   }

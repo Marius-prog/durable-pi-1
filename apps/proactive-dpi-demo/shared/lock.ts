@@ -3,17 +3,22 @@ import { dirname } from "node:path";
 
 /** PID of the live process holding this lock, if any. */
 export function lockOwner(path: string): number | undefined {
-  let pid: number;
+  let text: string;
   try {
-    pid = Number(readFileSync(path, "utf8"));
+    text = readFileSync(path, "utf8").trim();
   } catch {
     return undefined;
   }
+  // An empty or garbled file (a crash mid-write) is stale. Never signal pid 0: it means the whole process group.
+  if (!/^\d+$/.test(text)) return undefined;
+  const pid = Number(text);
+  if (pid < 1 || pid > 2 ** 31 - 1) return undefined;
   try {
     process.kill(pid, 0);
     return pid;
   } catch (e) {
-    return (e as NodeJS.ErrnoException).code === "ESRCH" ? undefined : pid;
+    // EPERM: the process exists but belongs to someone else. Anything else (ESRCH): it is gone.
+    return (e as NodeJS.ErrnoException).code === "EPERM" ? pid : undefined;
   }
 }
 

@@ -255,9 +255,22 @@ test("--save is ignored without --url, and a token too short to store stops it",
     assert.equal(s.registry.get("copy"), undefined);
 
     const bad = await runToExit(s.dir, ["--url", device.url, "--token", "short", "--save", "my-vm"]);
-    assert.notEqual(bad.code, 0);
-    assert.match(bad.stderr, /Token must be at least 32 characters/);
+    assert.equal(bad.code, 1);
+    assert.equal(bad.stderr.trim(), "Could not save my-vm: Token must be at least 32 characters");
     assert.equal(s.registry.get("my-vm"), undefined);
+
+    const badId = await runToExit(s.dir, ["--url", device.url, "--token", TOKEN, "--save", "My VM"]);
+    assert.equal(badId.code, 1);
+    assert.match(badId.stderr, /^Could not save My VM: Device id must match/);
+  });
+});
+
+test("--save with the id of a device from dpi-network.yaml is refused cleanly", async () => {
+  await withDevice(async (device, s) => {
+    writeFileSync(join(s.dir, "dpi-network.yaml"), `devices:\n  fromyaml:\n    kind: url\n    url: ${device.url}\n`);
+    const result = await runToExit(s.dir, ["--url", device.url, "--token", TOKEN, "--save", "fromyaml"]);
+    assert.equal(result.code, 1);
+    assert.equal(result.stderr.trim(), "Could not save fromyaml: fromyaml comes from dpi-network.yaml; edit it there");
   });
 });
 

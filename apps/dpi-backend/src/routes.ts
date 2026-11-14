@@ -23,6 +23,13 @@ const int = (value: unknown, name: string) => {
   return n;
 };
 
+/** An optional integer query parameter: absent uses the fallback, anything that is not a whole number is a 400. The store clamps the range. */
+const intQuery = (value: unknown, name: string, fallback: number) => {
+  if (value === undefined) return fallback;
+  if (typeof value !== "string" || !/^-?\d+$/.test(value.trim())) throw invalid(`${name} must be an integer`);
+  return Number(value);
+};
+
 export function v1(store: Store) {
   const r = Router();
   const create = idempotent(store);
@@ -84,7 +91,7 @@ export function v1(store: Store) {
       if (!["live", "terminal"].includes(status)) throw invalid("status must be live or terminal");
       const h = store.harness(L(res).row);
       if (status === "live") return res.json(await store.liveTasks(h));
-      res.json(await store.tasks(h, status, Number(req.query.limit ?? 20)));
+      res.json(await store.tasks(h, status, intQuery(req.query.limit, "limit", 20)));
     }),
   );
   r.post(
@@ -130,7 +137,7 @@ export function v1(store: Store) {
     route(async (req, res) => {
       const scope = String(req.query.scope ?? "all");
       if (scope === "active") return res.json({ items: await store.activeEntries(L(res).c) });
-      res.json(await store.entries(L(res).c, req.query.cursor as string | undefined, Number(req.query.limit ?? 500)));
+      res.json(await store.entries(L(res).c, req.query.cursor as string | undefined, intQuery(req.query.limit, "limit", 500)));
     }),
   );
   r.get(`${a}/transcript`, route(async (req, res) => res.json(await store.transcript(L(res).c, String(req.query.format ?? "json")))));

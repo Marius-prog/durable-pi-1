@@ -137,13 +137,13 @@ export class WatchStore {
       .map(toStreamRow);
   }
 
-  /** Log IDs with this fingerprint and decision since `sinceIso`. */
-  hits(fingerprint: string, decision: Decision, sinceIso: string): number[] {
+  /** Log IDs with this fingerprint and decision since `sinceIso`, whose verdict had at least `minProbability`. */
+  hits(fingerprint: string, decision: Decision, sinceIso: string, minProbability = 0): number[] {
     return this.db
       .prepare(
-        "SELECT log_id FROM verdicts WHERE fingerprint = ? AND decision = ? AND log_ts >= ? ORDER BY log_id",
+        "SELECT log_id FROM verdicts WHERE fingerprint = ? AND decision = ? AND log_ts >= ? AND COALESCE(probability, 0) >= ? ORDER BY log_id",
       )
-      .all(fingerprint, decision, sinceIso)
+      .all(fingerprint, decision, sinceIso, minProbability)
       .map((r) => Number(r.log_id));
   }
 
@@ -177,7 +177,8 @@ export class WatchStore {
       where.push(`l.severity IN (${allowed.map(() => "?").join(",")})`);
       params.push(...allowed);
     }
-    if (q.text) where.push("l.entry LIKE ?") && params.push(`%${q.text}%`);
+    // `%`, `_` and the escape character are literal text here, not LIKE wildcards.
+    if (q.text) where.push("l.entry LIKE ? ESCAPE '\\'") && params.push(`%${q.text.replace(/[\\%_]/g, "\\$&")}%`);
     return this.db
       .prepare(
         `SELECT ${PREFIXED_COLUMNS}, ${VERDICT_COLUMNS} FROM lg.logs l LEFT JOIN verdicts v ON v.log_id = l.id WHERE ${where.join(" AND ")} ORDER BY l.id DESC LIMIT ?`,

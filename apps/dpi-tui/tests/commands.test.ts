@@ -293,17 +293,13 @@ test("/sessions, /agents, /model and /devices open their pickers", async () => {
 
 // ------------------------------------------------------------------ no session attached
 
-// Suspected bug (source left alone): with no session attached, /thinking, /compact, /reset, /name and /fork call
-// `handle!.…` on undefined, so the flash is the raw TypeError ("Cannot read properties of undefined ...");
-// /new builds a request for the session "undefined". submit() has a proper "Pick a session first" message for plain text.
-test("commands that act on an agent say so when no session is attached", { todo: "no-session guard missing in commands.ts" }, async () => {
+test("commands that act on an agent say so when no session is attached, and send nothing", async () => {
   const app = new FakeApp();
   app.handle = undefined;
   app.sessionId = undefined;
-  for (const input of ["/thinking high", "/compact", "/reset", "/name x", "/fork 3"]) await runCommand(app.asApp, input);
-  assert.deepEqual(app.flashes.map((f) => f.error), [true, true, true, true, true]);
-  assert.ok(
-    app.flashes.every((f) => !/undefined/.test(f.text)),
-    `expected a plain "no session" message, got: ${app.flashes.map((f) => f.text).join(" | ")}`,
-  );
+  for (const input of ["/thinking high", "/compact", "/reset", "/name x", "/fork 3", "/new", "/new x"]) assert.equal(await runCommand(app.asApp, input), true, input);
+  assert.deepEqual(app.calls, []);
+  assert.deepEqual(app.attached, []);
+  assert.equal(app.flashes.length, 7);
+  for (const f of app.flashes) assert.deepEqual(f, { text: "Pick a session first (/sessions).", error: true });
 });

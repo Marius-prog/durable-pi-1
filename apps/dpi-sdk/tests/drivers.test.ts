@@ -311,10 +311,10 @@ test("env falls back to the process environment, drops multi-line values and str
   const dotenv = [
     "# comment",
     "",
-    'QUOTED="double quoted"',
+    'QUOTED="double quoted"  ', // trailing spaces are not part of the value
     "SINGLE='single quoted'",
     "export EXPORTED=exported-value",
-    "SPACED = spaced value",
+    "SPACED = spaced value   ",
     "EMPTY=",
     "not a line",
     "9BAD=1",

@@ -24,33 +24,60 @@ class Title implements Component {
   invalidate() {}
 }
 
-/** A titled SelectList; typing filters it. */
+/** A titled SelectList; typing filters it by the label shown or the value. */
 export class Picker extends Box {
-  readonly list: SelectList;
+  private current: SelectList;
   private filter = "";
   private title: Title;
+  private hintLine: Title;
+  private maxVisible: number;
   constructor(
     private label: string,
-    items: SelectItem[],
-    onPick: (item: SelectItem) => void,
-    onCancel: () => void,
+    private items: SelectItem[],
+    private onPick: (item: SelectItem) => void,
+    private onCancel: () => void,
     hint = "↑↓ move │ enter select │ type to filter │ esc close",
   ) {
     super(1, 0, panelBg);
     this.title = new Title(c.bold(c.accent(label)));
-    this.list = new SelectList(items, Math.max(1, Math.min(14, items.length)), selectTheme);
-    this.list.onSelect = onPick;
-    this.list.onCancel = onCancel;
+    this.hintLine = new Title(c.muted(hint));
+    this.maxVisible = Math.max(1, Math.min(14, items.length));
+    this.current = this.makeList(items);
+    this.layout();
+  }
+  /** The visible list; replaced whenever the filter changes. */
+  get list() {
+    return this.current;
+  }
+  private makeList(items: SelectItem[]) {
+    const list = new SelectList(items, this.maxVisible, selectTheme);
+    list.onSelect = this.onPick;
+    list.onCancel = this.onCancel;
+    return list;
+  }
+  private layout() {
+    this.clear();
     this.addChild(this.title);
-    this.addChild(this.list);
-    this.addChild(new Title(c.muted(hint)));
+    this.addChild(this.current);
+    this.addChild(this.hintLine);
+  }
+  // SelectList's own filter only matches the start of the (often hidden) value, so match here instead:
+  // the text on screen, case-insensitively anywhere, or the start of the value.
+  private applyFilter() {
+    const needle = this.filter.toLowerCase();
+    this.current = this.makeList(
+      needle
+        ? this.items.filter((i) => i.label.toLowerCase().includes(needle) || i.value.toLowerCase().startsWith(needle))
+        : this.items,
+    );
+    this.layout();
+    this.title.text = c.bold(c.accent(this.label)) + (this.filter ? c.muted(`  /${this.filter}`) : "");
   }
   handleInput(data: string) {
     if (matchesKey(data, "backspace")) this.filter = this.filter.slice(0, -1);
     else if (data.length === 1 && data >= " " && data !== "\x7f") this.filter += data;
-    else return this.list.handleInput(data);
-    this.list.setFilter(this.filter);
-    this.title.text = c.bold(c.accent(this.label)) + (this.filter ? c.muted(`  /${this.filter}`) : "");
+    else return this.current.handleInput(data);
+    this.applyFilter();
   }
 }
 
