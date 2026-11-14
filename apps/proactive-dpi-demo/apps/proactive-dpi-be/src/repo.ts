@@ -8,17 +8,17 @@ import { repoDir } from "../../../shared/paths.ts";
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 }).trim();
 
-export function ensureWorktree(branch: string, path: string) {
+export function ensureWorktree(branch: string, path: string, repo = repoDir) {
   if (existsSync(join(path, ".git"))) return;
-  git(repoDir, "worktree", "prune");
+  git(repo, "worktree", "prune");
   let exists = true;
   try {
-    git(repoDir, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`);
+    git(repo, "rev-parse", "--verify", "--quiet", `refs/heads/${branch}`);
   } catch {
     exists = false;
   }
-  if (exists) git(repoDir, "worktree", "add", "-q", path, branch);
-  else git(repoDir, "worktree", "add", "-q", "-b", branch, path, "main");
+  if (exists) git(repo, "worktree", "add", "-q", path, branch);
+  else git(repo, "worktree", "add", "-q", "-b", branch, path, "main");
 }
 
 /** What the engineer reviews: commits on the incident branch and the diff against main. */

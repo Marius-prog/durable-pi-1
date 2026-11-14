@@ -16,17 +16,22 @@ export type Revision = {
   containerStack: (stack: string) => string;
 };
 
-export async function loadRevision(ref: string, name: string): Promise<Revision> {
-  if (!existsSync(join(repoDir, ".git")))
-    throw Error(`Missing mock repo at ${repoDir}. Run npm run reset first.`);
+/** `where` defaults to the demo's repo and `.data/`; tests pass temp ones. */
+export async function loadRevision(
+  ref: string,
+  name: string,
+  where: { repoDir: string; dataDir: string } = { repoDir, dataDir },
+): Promise<Revision> {
+  if (!existsSync(join(where.repoDir, ".git")))
+    throw Error(`Missing mock repo at ${where.repoDir}. Run npm run reset first.`);
   const git = (...args: string[]) =>
-    execFileSync("git", args, { cwd: repoDir, encoding: "utf8" }).trim();
+    execFileSync("git", args, { cwd: where.repoDir, encoding: "utf8" }).trim();
   const commit = git("rev-parse", "--short", ref);
   const subject = git("log", "-1", "--format=%s", ref);
-  const dir = join(dataDir, "deploys", `${name}-${commit}`);
+  const dir = join(where.dataDir, "deploys", `${name}-${commit}`);
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
-    execSync(`git archive ${ref} | tar -x -C "${dir}"`, { cwd: repoDir });
+    execSync(`git archive ${ref} | tar -x -C "${dir}"`, { cwd: where.repoDir });
   }
   const mod = await import(pathToFileURL(join(dir, "src/routes/checkout.ts")).href);
   const server = readFileSync(join(dir, "src/server.ts"), "utf8").split("\n");

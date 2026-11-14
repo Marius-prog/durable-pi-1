@@ -115,5 +115,5 @@ curl -s "$U/v1/sessions/oneshot/agents/main/messages" "${H[@]}" \
 ```bash
 npm run dev     # restart on file changes (just backend dev)
 npm run check   # strict types, including the pi-durable ↔ SDK wire contract check
-npm test        # api, streams, store (jobs, start_session, extensions, read only), search_history, shared state and SIGKILL recovery (faux provider, no network)
+npm test        # every module: REST routes and error paths, auth, errors, idempotency, config, streams, store, durable jobs, extensions and tools, Jev (stubbed fetch), search_history, shared state and SIGKILL recovery (faux provider, no network)
 ```

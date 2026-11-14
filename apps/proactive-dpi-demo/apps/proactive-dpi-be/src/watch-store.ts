@@ -52,11 +52,13 @@ function toStreamRow(record: Record<string, unknown>): StreamRow {
 }
 
 export class WatchStore {
-  readonly db = new DatabaseSync(watchDbPath);
+  readonly db: DatabaseSync;
 
-  constructor() {
+  /** Paths default to the demo's `.data/` files; tests pass temp ones. */
+  constructor(watchPath = watchDbPath, logsPath = logsDbPath) {
+    this.db = new DatabaseSync(watchPath);
     this.db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;");
-    this.db.prepare("ATTACH DATABASE ? AS lg").run(logsDbPath);
+    this.db.prepare("ATTACH DATABASE ? AS lg").run(logsPath);
     ensureLogSchema(this.db, "lg");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS verdicts(
